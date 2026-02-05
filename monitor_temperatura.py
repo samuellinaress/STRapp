@@ -1,49 +1,70 @@
+import threading
 import time
 import random
 
-# Umbral máximo permitido
+# Umbral de temperatura
 UMBRAL_TEMPERATURA = 38.0
+
+# Variable compartida
+temperatura_actual = None
+
+# Semáforo: indica si hay una temperatura disponible
+sem_temperatura = threading.Semaphore(0)
+
+# Mutex para proteger la variable compartida
+mutex = threading.Lock()
+
 
 def leer_temperatura():
     """
-    Simula la lectura de un sensor de temperatura
+    Simula la lectura del sensor de temperatura
     """
     return random.uniform(35.0, 42.0)
 
-def evaluar_temperatura(temperatura):
-    """
-    Evalúa si la temperatura supera el umbral
-    """
-    if temperatura > UMBRAL_TEMPERATURA:
-        return True
-    return False
 
-def mostrar_alerta(temperatura):
+def hebra_productora():
     """
-    Muestra una alerta cuando la temperatura es crítica
+    Hebra productora: lee la temperatura
     """
-    print(f"ALERTA: Temperatura elevada ({temperatura:.2f} °C)")
-
-def mostrar_temperatura(temperatura):
-    """
-    Muestra la temperatura actual
-    """
-    print(f"Temperatura actual: {temperatura:.2f} °C")
-
-def iniciar_monitoreo():
-    """
-    Ciclo principal de monitoreo en tiempo real
-    """
-    print("Sistema de monitoreo iniciado...\n")
+    global temperatura_actual
 
     while True:
-        temperatura = leer_temperatura()
-        mostrar_temperatura(temperatura)
+        time.sleep(1)
 
-        if evaluar_temperatura(temperatura):
-            mostrar_alerta(temperatura)
+        temp = leer_temperatura()
 
-        time.sleep(1)  # Intervalo de tiempo (1 segundo)
+        with mutex:
+            temperatura_actual = temp
+            print(f"[Productor] Temperatura leída: {temp:.2f} °C")
 
-# Inicio del sistema
-iniciar_monitoreo()
+        # signal (sem_post)
+        sem_temperatura.release()
+
+
+def hebra_consumidora():
+    """
+    Hebra consumidora: procesa la temperatura
+    """
+    global temperatura_actual
+
+    while True:
+        # wait (sem_wait)
+        sem_temperatura.acquire()
+
+        with mutex:
+            temp = temperatura_actual
+
+        print(f"[Consumidor] Procesando temperatura: {temp:.2f} °C")
+
+        if temp > UMBRAL_TEMPERATURA:
+            print(f"ALERTA: Temperatura elevada ({temp:.2f} °C)")
+
+
+# Programa principal
+print("Sistema de monitoreo en tiempo real iniciado...\n")
+
+productor = threading.Thread(target=hebra_productora)
+consumidor = threading.Thread(target=hebra_consumidora)
+
+productor.start()
+consumidor.start()
