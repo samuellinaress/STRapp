@@ -2,69 +2,71 @@ import threading
 import time
 import random
 
-# Umbral de temperatura
-UMBRAL_TEMPERATURA = 38.0
-
-# Variable compartida
-temperatura_actual = None
-
-# Semáforo: indica si hay una temperatura disponible
+# Semáforo
 sem_temperatura = threading.Semaphore(0)
 
-# Mutex para proteger la variable compartida
+# Lock para proteger la variable compartida
 mutex = threading.Lock()
 
+temperatura_actual = 0
 
+
+# Hilo productor: simula lectura de temperatura
 def leer_temperatura():
-    """
-    Simula la lectura del sensor de temperatura
-    """
-    return random.uniform(35.0, 42.0)
-
-
-def hebra_productora():
-    """
-    Hebra productora: lee la temperatura
-    """
     global temperatura_actual
 
     while True:
-        time.sleep(1)
+        try:
+            temp = random.randint(20, 100)
 
-        temp = leer_temperatura()
+            with mutex:
+                temperatura_actual = temp
 
-        with mutex:
-            temperatura_actual = temp
-            print(f"[Productor] Temperatura leída: {temp:.2f} °C")
+            print(f"Temperatura leída: {temp} °C")
 
-        # signal (sem_post)
-        sem_temperatura.release()
+            # Señal al consumidor
+            sem_temperatura.release()
+
+            time.sleep(2)
+
+        except Exception as e:
+            print("Error al leer la temperatura:", e)
 
 
-def hebra_consumidora():
-    """
-    Hebra consumidora: procesa la temperatura
-    """
+# Hilo consumidor: procesa la temperatura
+def procesar_temperatura():
     global temperatura_actual
 
     while True:
-        # wait (sem_wait)
-        sem_temperatura.acquire()
+        try:
+            # Espera señal del productor
+            sem_temperatura.acquire()
 
-        with mutex:
-            temp = temperatura_actual
+            with mutex:
+                temp = temperatura_actual
 
-        print(f"[Consumidor] Procesando temperatura: {temp:.2f} °C")
+            if temp > 70:
+                print("ALERTA: Temperatura alta")
+            else:
+                print("Temperatura normal")
 
-        if temp > UMBRAL_TEMPERATURA:
-            print(f"ALERTA: Temperatura elevada ({temp:.2f} °C)")
+        except Exception as e:
+            print("Error al procesar la temperatura:", e)
 
 
-# Programa principal
-print("Sistema de monitoreo en tiempo real iniciado...\n")
+try:
+    #raise Exception("Error simulado en el sistema")
+    # Crear hilos
+    hilo_productor = threading.Thread(target=leer_temperatura)
+    hilo_consumidor = threading.Thread(target=procesar_temperatura)
 
-productor = threading.Thread(target=hebra_productora)
-consumidor = threading.Thread(target=hebra_consumidora)
+    # Iniciar hilos
+    hilo_productor.start()
+    hilo_consumidor.start()
 
-productor.start()
-consumidor.start()
+    # Esperar a que terminen
+    hilo_productor.join()
+    hilo_consumidor.join()
+
+except Exception as e:
+    print("Error al iniciar el sistema:", e)
