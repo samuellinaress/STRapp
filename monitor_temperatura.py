@@ -2,17 +2,59 @@ import threading
 import time
 import random
 
-# Semáforo
+# -------------------------------
+# VARIABLES GLOBALES DEL SISTEMA
+# -------------------------------
+
+# Semáforo que sincroniza productor y consumidor
 sem_temperatura = threading.Semaphore(0)
 
-# Lock para proteger la variable compartida
+# Lock para proteger el acceso a la variable compartida
 mutex = threading.Lock()
 
+# Variable compartida donde se almacena la temperatura
 temperatura_actual = 0
 
+# Umbral de temperatura peligrosa
+UMBRAL_TEMPERATURA = 70
 
-# Hilo productor: simula lectura de temperatura
+
+# --------------------------------------------------
+# FUNCIÓN RECURSIVA PARA VALIDAR TEMPERATURA CRÍTICA
+# --------------------------------------------------
+
+def verificar_temperatura(temp, intentos=3):
+    """
+    Esta función utiliza recursividad para verificar si una temperatura
+    es crítica. Si la temperatura es muy alta, se vuelve a evaluar
+    simulando una segunda verificación del sensor.
+    """
+
+    if intentos == 0:
+        return temp
+
+    if temp > UMBRAL_TEMPERATURA:
+        print("Verificando nuevamente la temperatura...")
+
+        # Simulación de una nueva lectura del sensor
+        nueva_temp = random.randint(20, 100)
+
+        return verificar_temperatura(nueva_temp, intentos - 1)
+
+    return temp
+
+
+# ----------------------------------
+# HILO PRODUCTOR (LECTURA DEL SENSOR)
+# ----------------------------------
+
 def leer_temperatura():
+    """
+    Este hilo simula la lectura de temperatura desde un sensor.
+    Genera valores aleatorios y los guarda en una variable compartida.
+    Luego libera el semáforo para indicar que hay un nuevo dato disponible.
+    """
+
     global temperatura_actual
 
     while True:
@@ -22,9 +64,9 @@ def leer_temperatura():
             with mutex:
                 temperatura_actual = temp
 
-            print(f"Temperatura leída: {temp} °C")
+            print(f"[PRODUCTOR] Temperatura leída: {temp} °C")
 
-            # Señal al consumidor
+            # Señal para el consumidor
             sem_temperatura.release()
 
             time.sleep(2)
@@ -33,8 +75,16 @@ def leer_temperatura():
             print("Error al leer la temperatura:", e)
 
 
-# Hilo consumidor: procesa la temperatura
+# ----------------------------------
+# HILO CONSUMIDOR (PROCESA LOS DATOS)
+# ----------------------------------
+
 def procesar_temperatura():
+    """
+    Este hilo espera a que el productor genere una temperatura.
+    Cuando recibe la señal del semáforo, procesa el dato.
+    """
+
     global temperatura_actual
 
     while True:
@@ -45,26 +95,34 @@ def procesar_temperatura():
             with mutex:
                 temp = temperatura_actual
 
-            if temp > 70:
-                print("ALERTA: Temperatura alta")
+            # Verificación recursiva
+            temp_validada = verificar_temperatura(temp)
+
+            if temp_validada > UMBRAL_TEMPERATURA:
+                print("ALERTA: Temperatura crítica detectada")
             else:
-                print("Temperatura normal")
+                print("[CONSUMIDOR] Temperatura dentro del rango normal")
 
         except Exception as e:
             print("Error al procesar la temperatura:", e)
 
 
+# ---------------------------
+# PROGRAMA PRINCIPAL
+# ---------------------------
+
 try:
-    #raise Exception("Error simulado en el sistema")
-    # Crear hilos
+    print("Sistema de Monitoreo de Temperatura iniciado...\n")
+
+    # Creación de hilos
     hilo_productor = threading.Thread(target=leer_temperatura)
     hilo_consumidor = threading.Thread(target=procesar_temperatura)
 
-    # Iniciar hilos
+    # Inicio de los hilos
     hilo_productor.start()
     hilo_consumidor.start()
 
-    # Esperar a que terminen
+    # Mantener ejecución
     hilo_productor.join()
     hilo_consumidor.join()
 
